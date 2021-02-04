@@ -88,3 +88,51 @@ jobs:
         with: 
           app-name: ${{ secrets.WEB_APPNAME }} 
           images: ${{ env.CONTAINER_REGISTRY }}/eshopwebmvc:${{ github.sha }}
+  
+  deploy-production:
+    env:
+      web-directory: ./src/Web
+
+    environment: Production
+
+    needs: container-build
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@master
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: '5.0.x'
+      
+      - name: Install EF tooling
+        run: |
+          dotnet tool install --global dotnet-ef
+
+      - name: Login in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Apply Database Migrations
+        run: |
+          dotnet tool restore
+          export ASPNETCORE_ENVIRONMENT="Production"
+          dotnet ef database update -c catalogcontext -p ../Infrastructure/Infrastructure.csproj -s Web.csproj --connection '${{ secrets.SQL_CONNECTION_STRING }}' --configuration Release --verbose
+          dotnet ef database update -c appidentitydbcontext -p ../Infrastructure/Infrastructure.csproj -s Web.csproj --connection '${{ secrets.SQL_CONNECTION_STRING }}' --configuration Release --verbose
+        working-directory: ${{ env.web-directory }}
+
+      - name: Deploy Web
+        uses: azure/webapps-deploy@v2
+        with: 
+          app-name: ${{ secrets.WEB_APPNAME }} 
+          images: ${{ env.CONTAINER_REGISTRY }}/eshopwebmvc:${{ github.sha }}
