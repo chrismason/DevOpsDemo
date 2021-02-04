@@ -95,7 +95,7 @@ jobs:
 
     environment: Production
 
-    needs: container-build
+    needs: deploy-integration
 
     runs-on: ubuntu-latest
 
